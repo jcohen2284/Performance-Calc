@@ -1,13 +1,9 @@
-let pdfjsLib;
-try {
-    pdfjsLib = window['pdfjs-dist/build/pdf'];
-    if (!pdfjsLib) {
-        pdfjsLib = window.pdfjsLib;
-    }
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-} catch (e) {
-    alert("PDF.js global library script initialization failed. Check internet access or CDN link.\nError: " + e.message);
-}
+// Reference point link setup
+const pdfjsLib = window['pdfjs-dist/build/pdf'];
+
+// Explicitly FORCE the library to ignore external background workers.
+// This is required to let you load files locally without web-server configurations.
+pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
 // App State
 let loadedPdf = null;
@@ -23,13 +19,9 @@ function updateStatus(text, color = "#007aff") {
 }
 
 function initiatePdfLoad() {
-    if (!pdfjsLib) {
-        alert("Cannot process file: PDF Engine failed to load from script CDN provider.");
-        return;
-    }
-
     const fileInput = document.getElementById('pdf-file-picker');
     const file = fileInput ? fileInput.files[0] : null;
+    
     if (!file) {
         updateStatus("No file chosen. Please select a local PDF file first.", "#ff3b30");
         return;
@@ -41,11 +33,11 @@ function initiatePdfLoad() {
     fileReader.onload = function(e) {
         try {
             const typedarray = new Uint8Array(e.target.result);
-            const runningLocally = window.location.protocol === 'file:';
 
+            // "disableWorker: true" forces local asset conversion streams safely inside one scope
             const loadingTask = pdfjsLib.getDocument({
                 data: typedarray,
-                disableWorker: runningLocally, 
+                disableWorker: true, 
                 verbosity: 0
             });
 
@@ -56,12 +48,12 @@ function initiatePdfLoad() {
                 setupPageExclusionUI(pdf.numPages);
                 document.getElementById('dynamic-config-area').style.display = 'block';
             }).catch(renderError => {
-                alert("PDF Parsing Crash: " + renderError.message);
+                alert("PDF Parsing Error: " + renderError.message);
                 updateStatus("Failed to read internal structure.", "#ff3b30");
             });
 
         } catch (innerError) {
-            alert("Processing error inside reader: " + innerError.message);
+            alert("FileReader processing issue: " + innerError.message);
         }
     };
 
@@ -94,9 +86,6 @@ function setupPageExclusionUI(totalPages) {
     }
 }
 
-/**
- * Phase 3: Display Screen Init Routing Logic
- */
 function handleInputSubmit() {
     if (!loadedPdf) {
         updateStatus("Upload document file first.", "#ffcc00");
@@ -105,9 +94,9 @@ function handleInputSubmit() {
 
     currentPageNum = 1; 
 
-    // Sweep checking from page 1 forward to bypass exclusions initially
+    // Auto check if Page 1 is hidden
     if (isPageHidden(currentPageNum)) {
-        let alternativePage = findValidAlternativePage(currentPageNum, 1);
+        let alternativePage = findValidAlternativePage(currentPageNum);
         if (alternativePage === null) {
             alert("Error: All pages are currently marked hidden.");
             return;
@@ -115,14 +104,14 @@ function handleInputSubmit() {
         currentPageNum = alternativePage;
     }
 
-    // Toggle viewport screens
+    // Move UI screens
     document.getElementById('config-screen').style.display = 'none';
     document.getElementById('display-screen').style.display = 'flex';
     
-    // Critical: Let layout calculations stabilize prior to driving canvas contexts
-    requestAnimationFrame(() => {
+    // Safety buffer wait time before starting rendering engine pipeline
+    setTimeout(() => {
         renderSpecificPage(currentPageNum);
-    });
+    }, 100);
 }
 
 function isPageHidden(pageNum) {
@@ -130,13 +119,9 @@ function isPageHidden(pageNum) {
     return box ? box.checked : false;
 }
 
-/**
- * Dynamic pagination scanning adjustments
- */
 function changePage(direction) {
     let checkPage = currentPageNum + direction;
     
-    // Scan loop to cleanly skip hidden entries down the line
     while (checkPage >= 1 && checkPage <= loadedPdf.numPages) {
         if (!isPageHidden(checkPage)) {
             currentPageNum = checkPage;
@@ -147,7 +132,7 @@ function changePage(direction) {
     }
 }
 
-function findValidAlternativePage(failedPage, step = 1) {
+function findValidAlternativePage(failedPage) {
     for (let p = failedPage; p <= loadedPdf.numPages; p++) {
         if (!isPageHidden(p)) return p;
     }
@@ -157,9 +142,6 @@ function findValidAlternativePage(failedPage, step = 1) {
     return null; 
 }
 
-/**
- * Phase 4: Active Canvas Frame Processing
- */
 function renderSpecificPage(pageNumber) {
     document.getElementById('page-indicator').innerText = `Displaying Page: ${pageNumber} / ${loadedPdf.numPages}`;
 
@@ -188,14 +170,15 @@ function renderSpecificPage(pageNumber) {
         };
         
         currentRenderTask = page.render(renderContext);
-
         currentRenderTask.promise.then(() => {
             currentRenderTask = null; 
         }).catch(err => {
             if (err.name !== 'HeadingToNextPageError' && err.name !== 'RenderingCancelledException') {
-                console.error(err);
+                console.error("Rendering issue: ", err);
             }
         });
+    }).catch(err => {
+        alert("Render crash error inside library engine: " + err.message);
     });
 }
 
