@@ -1,16 +1,21 @@
-// FIX: Force the global assignment because version 3.4.120 leaves pdfjsLib undefined from CDN
-const pdfjsLib = window['pdfjs-dist/build/pdf'];
-
-// Configure PDF.js Worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+// Global catch-all to verify library availability immediately on script execution
+let pdfjsLib;
+try {
+    pdfjsLib = window['pdfjs-dist/build/pdf'];
+    if (!pdfjsLib) {
+        // Fallback check for alternative versions of the library bundle
+        pdfjsLib = window.pdfjsLib;
+    }
+    // Set up standard worker thread reference
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+} catch (e) {
+    alert("PDF.js global library script initialization failed. Check internet access or CDN link.\nError: " + e.message);
+}
 
 // App State
 let loadedPdf = null;
 let currentRenderTask = null; 
 
-/**
- * Updates UI status ribbon
- */
 function updateStatus(text, color = "#007aff") {
     const statusBox = document.getElementById('status-message');
     if (statusBox) {
@@ -20,70 +25,75 @@ function updateStatus(text, color = "#007aff") {
 }
 
 /**
- * Phase 1: Triggered when clicking "Load PDF Document"
+ * Phase 1: Main execution block triggered by HTML input or button click
  */
 function initiatePdfLoad() {
+    // Basic connectivity alert
+    if (!pdfjsLib) {
+        alert("Cannot process file: PDF Engine failed to load from script CDN provider.");
+        return;
+    }
+
     const fileInput = document.getElementById('pdf-file-picker');
-    
     if (!fileInput) {
-        console.error("HTML Input element '#pdf-file-picker' not found.");
-        updateStatus("Critical Error: Missing components.", "#ff3b30");
+        alert("Error: Script could not detect the file picker component in HTML.");
         return;
     }
 
     const file = fileInput.files[0];
-
     if (!file) {
-        updateStatus("Please select a file from your device first.", "#ff3b30");
+        updateStatus("No file chosen. Please tap 'Select PDF File'.", "#ff3b30");
         return;
     }
 
     updateStatus("Reading file locally...", "#007aff");
 
     const fileReader = new FileReader();
+    
     fileReader.onload = function(e) {
-        const typedarray = new Uint8Array(e.target.result);
-        
-        // Disable worker if running on file:/// protocol to bypass local CORS blocks
-        const useFallbackWorker = window.location.protocol === 'file:';
-
-        const loadingTask = pdfjsLib.getDocument({
-            data: typedarray,
-            disableWorker: useFallbackWorker, 
-            verbosity: 0
-        });
-
-        loadingTask.promise.then(pdf => {
-            loadedPdf = pdf;
-            updateStatus("PDF Loaded Successfully! Unlocking configurations.", "#34c759");
+        try {
+            const typedarray = new Uint8Array(e.target.result);
             
-            // Build the optional page manager interface
-            setupPageExclusionUI(pdf.numPages);
+            // Critical Local Testing Override: Disable worker thread dependencies if running off local file paths 
+            const runningLocally = window.location.protocol === 'file:';
 
-            // Reveal Phase 2 configuration sections gracefully
-            document.getElementById('dynamic-config-area').style.display = 'block';
-        }).catch(err => {
-            updateStatus("Error parsing PDF: " + err.message, "#ff3b30");
-            console.error("PDFJS Loading Error: ", err);
-        });
+            const loadingTask = pdfjsLib.getDocument({
+                data: typedarray,
+                disableWorker: runningLocally, 
+                verbosity: 0
+            });
+
+            loadingTask.promise.then(pdf => {
+                loadedPdf = pdf;
+                updateStatus("PDF Loaded Successfully! Unlocking configurations.", "#34c759");
+                
+                // Unfold option checks
+                setupPageExclusionUI(pdf.numPages);
+                document.getElementById('dynamic-config-area').style.display = 'block';
+            }).catch(renderError => {
+                alert("PDF Parsing Crash: " + renderError.message);
+                updateStatus("Failed to read internal structure.", "#ff3b30");
+            });
+
+        } catch (innerError) {
+            alert("Processing error inside reader: " + innerError.message);
+        }
     };
 
-    fileReader.onerror = function(err) {
-        updateStatus("FileReader failed to access file.", "#ff3b30");
-        console.error("FileReader Error: ", err);
+    fileReader.onerror = function() {
+        alert("Device file-system blocked access to this document via standard FileReader channels.");
     };
 
     fileReader.readAsArrayBuffer(file);
 }
 
 /**
- * Phase 2 Helper: Creates the optional checklist of pages dynamically
+ * Phase 2 Helper
  */
 function setupPageExclusionUI(totalPages) {
     const container = document.getElementById('exclusion-container');
     if (!container) return;
-    
-    container.innerHTML = ""; // Clear old calculations if reloading files
+    container.innerHTML = ""; 
 
     for (let i = 1; i <= totalPages; i++) {
         const row = document.createElement('div');
@@ -107,22 +117,21 @@ function setupPageExclusionUI(totalPages) {
 }
 
 /**
- * Phase 3: Handles rule calculations and jumps over hidden pages
+ * Phase 3: Routing Logic
  */
 function handleInputSubmit() {
     const weightInput = document.getElementById('weightInput').value;
     const weight = parseFloat(weightInput);
     
     if (!loadedPdf) {
-        updateStatus("Please upload a valid PDF file first.", "#ffcc00");
+        updateStatus("Upload document file first.", "#ffcc00");
         return;
     }
     if (weightInput === "" || isNaN(weight)) {
-        updateStatus("Please enter a numeric weight value.", "#ffcc00");
+        updateStatus("Please enter a valid numeric weight configuration.", "#ffcc00");
         return;
     }
 
-    // Baseline configuration routing rules
     let targetPage = 1; 
     if (weight < 50) {
         targetPage = 2;
@@ -132,22 +141,19 @@ function handleInputSubmit() {
         targetPage = 4;
     }
 
-    // Safety fallback bounds checking
     if (targetPage > loadedPdf.numPages) {
         targetPage = loadedPdf.numPages;
     }
 
-    // If the targeted sheet is hidden, automatically step to the closest open sheet
     if (isPageHidden(targetPage)) {
         let alternativePage = findValidAlternativePage(targetPage);
         if (alternativePage === null) {
-            alert("Error: All pages in this document are hidden. Please check your page settings.");
+            alert("Error: All pages are currently marked hidden.");
             return;
         }
         targetPage = alternativePage;
     }
 
-    // Screen Transition
     document.getElementById('config-screen').style.display = 'none';
     document.getElementById('display-screen').style.display = 'flex';
     
@@ -169,9 +175,6 @@ function findValidAlternativePage(failedPage) {
     return null; 
 }
 
-/**
- * Handles clear, crisp canvas high-DPI scaling
- */
 function renderSpecificPage(pageNumber) {
     document.getElementById('page-indicator').innerText = `Displaying Page: ${pageNumber} / ${loadedPdf.numPages}`;
 
@@ -205,7 +208,7 @@ function renderSpecificPage(pageNumber) {
             currentRenderTask = null; 
         }).catch(err => {
             if (err.name !== 'HeadingToNextPageError' && err.name !== 'RenderingCancelledException') {
-                console.error("Render error:", err);
+                console.error(err);
             }
         });
     });
@@ -216,7 +219,6 @@ function backToConfig() {
         currentRenderTask.cancel();
         currentRenderTask = null;
     }
-
     document.getElementById('display-screen').style.display = 'none';
     document.getElementById('config-screen').style.display = 'flex';
     updateStatus("Adjust inputs or exclusions and re-submit.", "#34c759");
