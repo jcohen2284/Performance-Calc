@@ -16,6 +16,20 @@
         <canvas id="pdf-canvas" style="border: 1px solid black;"></canvas>
     </div>
 
+    <div id="controls" style="margin-bottom: 20px;">
+    <label style="font-weight:bold; display:block; margin-bottom:5px;">1. Load Your PDF First:</label>
+    <input type="file" id="pdf-file-picker" accept=".pdf" onchange="loadLocalFile(event)" style="margin-bottom: 15px;">
+    
+    <hr>
+    
+    <label style="font-weight:bold; display:block; margin-bottom:5px;">2. Enter Performance Data:</label>
+    <input type="number" id="weightInput" placeholder="Enter Weight">
+    <button onclick="handleInputSubmit()">Load Page</button>
+</div>
+
+<div id="status-message">System Status: Please select your PDF file...</div>
+<canvas id="pdf-canvas" style="border: 1px solid black;"></canvas>
+
     <script src="app.js"></script>
 </body>
 </html>
