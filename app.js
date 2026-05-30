@@ -3,7 +3,6 @@ let pdfjsLib;
 try {
     pdfjsLib = window['pdfjs-dist/build/pdf'];
     if (!pdfjsLib) {
-        // Fallback check for alternative versions of the library bundle
         pdfjsLib = window.pdfjsLib;
     }
     // Set up standard worker thread reference
@@ -25,10 +24,9 @@ function updateStatus(text, color = "#007aff") {
 }
 
 /**
- * Phase 1: Main execution block triggered by HTML input or button click
+ * Phase 1: Main execution block triggered by button click
  */
 function initiatePdfLoad() {
-    // Basic connectivity alert
     if (!pdfjsLib) {
         alert("Cannot process file: PDF Engine failed to load from script CDN provider.");
         return;
@@ -42,7 +40,7 @@ function initiatePdfLoad() {
 
     const file = fileInput.files[0];
     if (!file) {
-        updateStatus("No file chosen. Please tap 'Select PDF File'.", "#ff3b30");
+        updateStatus("No file chosen. Please select a local PDF file first.", "#ff3b30");
         return;
     }
 
@@ -67,7 +65,7 @@ function initiatePdfLoad() {
                 loadedPdf = pdf;
                 updateStatus("PDF Loaded Successfully! Unlocking configurations.", "#34c759");
                 
-                // Unfold option checks
+                // Set up exclusion list checks
                 setupPageExclusionUI(pdf.numPages);
                 document.getElementById('dynamic-config-area').style.display = 'block';
             }).catch(renderError => {
@@ -88,7 +86,7 @@ function initiatePdfLoad() {
 }
 
 /**
- * Phase 2 Helper
+ * Phase 2 Helper: Generates page exclusion checkboxes dynamically
  */
 function setupPageExclusionUI(totalPages) {
     const container = document.getElementById('exclusion-container');
@@ -117,7 +115,7 @@ function setupPageExclusionUI(totalPages) {
 }
 
 /**
- * Phase 3: Routing Logic
+ * Phase 3: Routing Logic based on Weight thresholds
  */
 function handleInputSubmit() {
     const weightInput = document.getElementById('weightInput').value;
@@ -132,6 +130,7 @@ function handleInputSubmit() {
         return;
     }
 
+    // Direct conditional logic for performance page assignment
     let targetPage = 1; 
     if (weight < 50) {
         targetPage = 2;
@@ -141,6 +140,7 @@ function handleInputSubmit() {
         targetPage = 4;
     }
 
+    // Safety fallback constraint checks
     if (targetPage > loadedPdf.numPages) {
         targetPage = loadedPdf.numPages;
     }
@@ -175,6 +175,9 @@ function findValidAlternativePage(failedPage) {
     return null; 
 }
 
+/**
+ * Phase 4: Clean rendering inside canvas context
+ */
 function renderSpecificPage(pageNumber) {
     document.getElementById('page-indicator').innerText = `Displaying Page: ${pageNumber} / ${loadedPdf.numPages}`;
 
