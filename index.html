@@ -24,7 +24,7 @@
         h3 { font-size: 16px; text-align: left; margin-bottom: 10px; }
         .input-group { margin-bottom: 20px; }
         label { display: block; font-weight: 600; margin-bottom: 8px; color: #86868b; }
-        input[type="number"], input[type="file"] {
+        input[type="file"] {
             width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 16px; box-sizing: border-box;
         }
         #dynamic-config-area {
@@ -65,12 +65,7 @@
             </div>
 
             <div id="dynamic-config-area">
-                <div class="input-group">
-                    <label>2. Enter Weight (lbs/kg)</label>
-                    <input type="number" id="weightInput" placeholder="e.g. 75">
-                </div>
-
-                <h3>3. Hide Pages (Optional)</h3>
+                <h3>2. Hide Pages (Optional)</h3>
                 <div class="page-exclusion-zone" id="exclusion-container"></div>
 
                 <button onclick="handleInputSubmit()">Generate Performance Sheet</button>
