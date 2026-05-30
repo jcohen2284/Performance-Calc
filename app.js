@@ -1,8 +1,8 @@
 // Point PDF.js to its required worker script
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
-// Direct download link using your Google Drive File ID
-const pdfUrl = 'https://docs.google.com/uc?export=download&id=113qRCXMOqYmL316oGlY1wfCub7jX4-eD';
+// We route the Google Drive link through a free proxy to bypass browser blocks
+const pdfUrl = 'https://corsproxy.io/?https://docs.google.com/uc?export=download&id=113qRCXMOqYmL316oGlY1wfCub7jX4-eD';
 
 let loadedPdf = null;
 
