@@ -1,3 +1,6 @@
+// FIX: Force the global assignment because version 3.4.120 leaves pdfjsLib undefined from CDN
+const pdfjsLib = window['pdfjs-dist/build/pdf'];
+
 // Configure PDF.js Worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
@@ -22,10 +25,9 @@ function updateStatus(text, color = "#007aff") {
 function initiatePdfLoad() {
     const fileInput = document.getElementById('pdf-file-picker');
     
-    // Safety check: make sure the element actually exists
     if (!fileInput) {
         console.error("HTML Input element '#pdf-file-picker' not found.");
-        updateStatus("Critical Error: Missing HTML components.", "#ff3b30");
+        updateStatus("Critical Error: Missing components.", "#ff3b30");
         return;
     }
 
@@ -40,14 +42,14 @@ function initiatePdfLoad() {
 
     const fileReader = new FileReader();
     fileReader.onload = function(e) {
-        // Use e.target.result directly for cleaner processing
         const typedarray = new Uint8Array(e.target.result);
         
-        // Dynamic Fallback: If running locally via file:///, standard workers crash.
-        // We temporarily disable separate worker threads if a local protocol is detected.
+        // Disable worker if running on file:/// protocol to bypass local CORS blocks
+        const useFallbackWorker = window.location.protocol === 'file:';
+
         const loadingTask = pdfjsLib.getDocument({
             data: typedarray,
-            disableWorker: window.location.protocol === 'file:', 
+            disableWorker: useFallbackWorker, 
             verbosity: 0
         });
 
@@ -81,7 +83,7 @@ function setupPageExclusionUI(totalPages) {
     const container = document.getElementById('exclusion-container');
     if (!container) return;
     
-    container.innerHTML = ""; // Clear out previous generation if any
+    container.innerHTML = ""; // Clear old calculations if reloading files
 
     for (let i = 1; i <= totalPages; i++) {
         const row = document.createElement('div');
@@ -120,7 +122,7 @@ function handleInputSubmit() {
         return;
     }
 
-    // Determine target page baseline based on weight ranges
+    // Baseline configuration routing rules
     let targetPage = 1; 
     if (weight < 50) {
         targetPage = 2;
@@ -130,53 +132,45 @@ function handleInputSubmit() {
         targetPage = 4;
     }
 
-    // Safety fallback: Ensure base calculation doesn't overshoot absolute counts
+    // Safety fallback bounds checking
     if (targetPage > loadedPdf.numPages) {
         targetPage = loadedPdf.numPages;
     }
 
-    // Optional Checklist Check: If calculated page is marked hidden, find closest accessible alternative
+    // If the targeted sheet is hidden, automatically step to the closest open sheet
     if (isPageHidden(targetPage)) {
         let alternativePage = findValidAlternativePage(targetPage);
         if (alternativePage === null) {
-            alert("Error: All pages in this document have been hidden. Please uncheck some options.");
+            alert("Error: All pages in this document are hidden. Please check your page settings.");
             return;
         }
         targetPage = alternativePage;
     }
 
-    // Transition Screen Visibility
+    // Screen Transition
     document.getElementById('config-screen').style.display = 'none';
     document.getElementById('display-screen').style.display = 'flex';
     
     renderSpecificPage(targetPage);
 }
 
-/**
- * Checks if a page index has a checked box next to it
- */
 function isPageHidden(pageNum) {
     const box = document.getElementById(`hide-page-${pageNum}`);
     return box ? box.checked : false;
 }
 
-/**
- * Fallback router: Finds the next closest accessible page if target was hidden
- */
 function findValidAlternativePage(failedPage) {
-    // Look forward first
     for (let p = failedPage; p <= loadedPdf.numPages; p++) {
         if (!isPageHidden(p)) return p;
     }
-    // Loop backward if forward is exhausted
     for (let p = failedPage; p >= 1; p--) {
         if (!isPageHidden(p)) return p;
     }
-    return null; // All pages are blocked
+    return null; 
 }
 
 /**
- * Renders a single page onto the viewing canvas with Retina High-DPI support
+ * Handles clear, crisp canvas high-DPI scaling
  */
 function renderSpecificPage(pageNumber) {
     document.getElementById('page-indicator').innerText = `Displaying Page: ${pageNumber} / ${loadedPdf.numPages}`;
@@ -217,9 +211,6 @@ function renderSpecificPage(pageNumber) {
     });
 }
 
-/**
- * Resets view backward
- */
 function backToConfig() {
     if (currentRenderTask) {
         currentRenderTask.cancel();
