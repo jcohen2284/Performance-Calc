@@ -46,8 +46,10 @@
         #display-screen { display: none; flex-direction: column; height: 100vh; background: #3a3a3c; }
         .toolbar { background: #1c1c1e; padding: 15px; display: flex; justify-content: space-between; align-items: center; color: white; }
         .back-btn { background: #3a3a3c; width: auto; padding: 8px 16px; }
+        .nav-group { display: flex; gap: 10px; }
+        .nav-btn { background: #007aff; width: auto; padding: 8px 16px; font-size: 14px; }
         #pdf-container { flex: 1; overflow: auto; display: flex; justify-content: center; align-items: flex-start; padding: 20px; }
-        canvas { background: white; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        canvas { background: white; box-shadow: 0 4px 20px rgba(0,0,0,0.3); display: block; }
     </style>
 </head>
 <body>
@@ -79,7 +81,10 @@
         <div class="toolbar">
             <button class="back-btn" onclick="backToConfig()">← Back to Settings</button>
             <span id="page-indicator" style="font-weight: 600;">Page: --</span>
-            <div style="width: 120px;"></div>
+            <div class="nav-group">
+                <button class="nav-btn" onclick="changePage(-1)">Previous</button>
+                <button class="nav-btn" onclick="changePage(1)">Next</button>
+            </div>
         </div>
         
         <div id="pdf-container">
