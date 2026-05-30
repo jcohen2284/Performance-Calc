@@ -5,7 +5,6 @@ try {
     if (!pdfjsLib) {
         pdfjsLib = window.pdfjsLib;
     }
-    // Set up standard worker thread reference
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 } catch (e) {
     alert("PDF.js global library script initialization failed. Check internet access or CDN link.\nError: " + e.message);
@@ -51,8 +50,6 @@ function initiatePdfLoad() {
     fileReader.onload = function(e) {
         try {
             const typedarray = new Uint8Array(e.target.result);
-            
-            // Critical Local Testing Override: Disable worker thread dependencies if running off local file paths 
             const runningLocally = window.location.protocol === 'file:';
 
             const loadingTask = pdfjsLib.getDocument({
@@ -65,7 +62,6 @@ function initiatePdfLoad() {
                 loadedPdf = pdf;
                 updateStatus("PDF Loaded Successfully! Unlocking configurations.", "#34c759");
                 
-                // Set up exclusion list checks
                 setupPageExclusionUI(pdf.numPages);
                 document.getElementById('dynamic-config-area').style.display = 'block';
             }).catch(renderError => {
@@ -115,36 +111,18 @@ function setupPageExclusionUI(totalPages) {
 }
 
 /**
- * Phase 3: Routing Logic based on Weight thresholds
+ * Phase 3: Routing Logic
  */
 function handleInputSubmit() {
-    const weightInput = document.getElementById('weightInput').value;
-    const weight = parseFloat(weightInput);
-    
     if (!loadedPdf) {
         updateStatus("Upload document file first.", "#ffcc00");
         return;
     }
-    if (weightInput === "" || isNaN(weight)) {
-        updateStatus("Please enter a valid numeric weight configuration.", "#ffcc00");
-        return;
-    }
 
-    // Direct conditional logic for performance page assignment
+    // Default target starts directly at page 1
     let targetPage = 1; 
-    if (weight < 50) {
-        targetPage = 2;
-    } else if (weight >= 50 && weight < 100) {
-        targetPage = 3;
-    } else {
-        targetPage = 4;
-    }
 
-    // Safety fallback constraint checks
-    if (targetPage > loadedPdf.numPages) {
-        targetPage = loadedPdf.numPages;
-    }
-
+    // If Page 1 is explicitly hidden, run through alternative scanner options
     if (isPageHidden(targetPage)) {
         let alternativePage = findValidAlternativePage(targetPage);
         if (alternativePage === null) {
@@ -176,7 +154,7 @@ function findValidAlternativePage(failedPage) {
 }
 
 /**
- * Phase 4: Clean rendering inside canvas context
+ * Phase 4: Render inside canvas context
  */
 function renderSpecificPage(pageNumber) {
     document.getElementById('page-indicator').innerText = `Displaying Page: ${pageNumber} / ${loadedPdf.numPages}`;
