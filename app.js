@@ -1,4 +1,3 @@
-// Global catch-all to verify library availability immediately on script execution
 let pdfjsLib;
 try {
     pdfjsLib = window['pdfjs-dist/build/pdf'];
@@ -13,6 +12,7 @@ try {
 // App State
 let loadedPdf = null;
 let currentRenderTask = null; 
+let currentPageNum = 1;
 
 function updateStatus(text, color = "#007aff") {
     const statusBox = document.getElementById('status-message');
@@ -22,9 +22,6 @@ function updateStatus(text, color = "#007aff") {
     }
 }
 
-/**
- * Phase 1: Main execution block triggered by button click
- */
 function initiatePdfLoad() {
     if (!pdfjsLib) {
         alert("Cannot process file: PDF Engine failed to load from script CDN provider.");
@@ -32,19 +29,13 @@ function initiatePdfLoad() {
     }
 
     const fileInput = document.getElementById('pdf-file-picker');
-    if (!fileInput) {
-        alert("Error: Script could not detect the file picker component in HTML.");
-        return;
-    }
-
-    const file = fileInput.files[0];
+    const file = fileInput ? fileInput.files[0] : null;
     if (!file) {
         updateStatus("No file chosen. Please select a local PDF file first.", "#ff3b30");
         return;
     }
 
     updateStatus("Reading file locally...", "#007aff");
-
     const fileReader = new FileReader();
     
     fileReader.onload = function(e) {
@@ -74,16 +65,9 @@ function initiatePdfLoad() {
         }
     };
 
-    fileReader.onerror = function() {
-        alert("Device file-system blocked access to this document via standard FileReader channels.");
-    };
-
     fileReader.readAsArrayBuffer(file);
 }
 
-/**
- * Phase 2 Helper: Generates page exclusion checkboxes dynamically
- */
 function setupPageExclusionUI(totalPages) {
     const container = document.getElementById('exclusion-container');
     if (!container) return;
@@ -111,7 +95,7 @@ function setupPageExclusionUI(totalPages) {
 }
 
 /**
- * Phase 3: Routing Logic
+ * Phase 3: Display Screen Init Routing Logic
  */
 function handleInputSubmit() {
     if (!loadedPdf) {
@@ -119,23 +103,26 @@ function handleInputSubmit() {
         return;
     }
 
-    // Default target starts directly at page 1
-    let targetPage = 1; 
+    currentPageNum = 1; 
 
-    // If Page 1 is explicitly hidden, run through alternative scanner options
-    if (isPageHidden(targetPage)) {
-        let alternativePage = findValidAlternativePage(targetPage);
+    // Sweep checking from page 1 forward to bypass exclusions initially
+    if (isPageHidden(currentPageNum)) {
+        let alternativePage = findValidAlternativePage(currentPageNum, 1);
         if (alternativePage === null) {
             alert("Error: All pages are currently marked hidden.");
             return;
         }
-        targetPage = alternativePage;
+        currentPageNum = alternativePage;
     }
 
+    // Toggle viewport screens
     document.getElementById('config-screen').style.display = 'none';
     document.getElementById('display-screen').style.display = 'flex';
     
-    renderSpecificPage(targetPage);
+    // Critical: Let layout calculations stabilize prior to driving canvas contexts
+    requestAnimationFrame(() => {
+        renderSpecificPage(currentPageNum);
+    });
 }
 
 function isPageHidden(pageNum) {
@@ -143,7 +130,24 @@ function isPageHidden(pageNum) {
     return box ? box.checked : false;
 }
 
-function findValidAlternativePage(failedPage) {
+/**
+ * Dynamic pagination scanning adjustments
+ */
+function changePage(direction) {
+    let checkPage = currentPageNum + direction;
+    
+    // Scan loop to cleanly skip hidden entries down the line
+    while (checkPage >= 1 && checkPage <= loadedPdf.numPages) {
+        if (!isPageHidden(checkPage)) {
+            currentPageNum = checkPage;
+            renderSpecificPage(currentPageNum);
+            return;
+        }
+        checkPage += direction;
+    }
+}
+
+function findValidAlternativePage(failedPage, step = 1) {
     for (let p = failedPage; p <= loadedPdf.numPages; p++) {
         if (!isPageHidden(p)) return p;
     }
@@ -154,7 +158,7 @@ function findValidAlternativePage(failedPage) {
 }
 
 /**
- * Phase 4: Render inside canvas context
+ * Phase 4: Active Canvas Frame Processing
  */
 function renderSpecificPage(pageNumber) {
     document.getElementById('page-indicator').innerText = `Displaying Page: ${pageNumber} / ${loadedPdf.numPages}`;
