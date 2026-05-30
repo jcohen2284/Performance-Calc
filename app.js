@@ -18,10 +18,17 @@ function updateStatus(text, color = "#007aff") {
 
 /**
  * Phase 1: Triggered when clicking "Load PDF Document"
- * Validates selection, parses the file, and unlocks configuration inputs
  */
 function initiatePdfLoad() {
     const fileInput = document.getElementById('pdf-file-picker');
+    
+    // Safety check: make sure the element actually exists
+    if (!fileInput) {
+        console.error("HTML Input element '#pdf-file-picker' not found.");
+        updateStatus("Critical Error: Missing HTML components.", "#ff3b30");
+        return;
+    }
+
     const file = fileInput.files[0];
 
     if (!file) {
@@ -32,10 +39,19 @@ function initiatePdfLoad() {
     updateStatus("Reading file locally...", "#007aff");
 
     const fileReader = new FileReader();
-    fileReader.onload = function() {
-        const typedarray = new Uint8Array(this.result);
+    fileReader.onload = function(e) {
+        // Use e.target.result directly for cleaner processing
+        const typedarray = new Uint8Array(e.target.result);
         
-        pdfjsLib.getDocument(typedarray).promise.then(pdf => {
+        // Dynamic Fallback: If running locally via file:///, standard workers crash.
+        // We temporarily disable separate worker threads if a local protocol is detected.
+        const loadingTask = pdfjsLib.getDocument({
+            data: typedarray,
+            disableWorker: window.location.protocol === 'file:', 
+            verbosity: 0
+        });
+
+        loadingTask.promise.then(pdf => {
             loadedPdf = pdf;
             updateStatus("PDF Loaded Successfully! Unlocking configurations.", "#34c759");
             
@@ -46,9 +62,15 @@ function initiatePdfLoad() {
             document.getElementById('dynamic-config-area').style.display = 'block';
         }).catch(err => {
             updateStatus("Error parsing PDF: " + err.message, "#ff3b30");
-            console.error(err);
+            console.error("PDFJS Loading Error: ", err);
         });
     };
+
+    fileReader.onerror = function(err) {
+        updateStatus("FileReader failed to access file.", "#ff3b30");
+        console.error("FileReader Error: ", err);
+    };
+
     fileReader.readAsArrayBuffer(file);
 }
 
@@ -57,6 +79,8 @@ function initiatePdfLoad() {
  */
 function setupPageExclusionUI(totalPages) {
     const container = document.getElementById('exclusion-container');
+    if (!container) return;
+    
     container.innerHTML = ""; // Clear out previous generation if any
 
     for (let i = 1; i <= totalPages; i++) {
